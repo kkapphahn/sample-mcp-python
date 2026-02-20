@@ -1,11 +1,70 @@
+"""
+Sample MCP (Model Context Protocol) server hosted on Azure Functions.
+
+Transport: Streamable HTTP
+--------------------------
+This server uses the Streamable HTTP transport (NOT the deprecated SSE transport).
+
+- Endpoint:  /runtime/webhooks/mcp          (Streamable HTTP)
+- Deprecated: /runtime/webhooks/mcp/sse     (SSE — do NOT use for new projects)
+
+Streamable HTTP requires:
+  - azure-functions >= 1.24.0
+  - Extension bundle [4.0.0, 5.0.0) in host.json
+  - Accept: application/json, text/event-stream header on all requests
+
+Authentication
+--------------
+All requests must include the MCP extension system key in the request header:
+    x-functions-key: <mcp_extension_system_key>
+
+The key can be retrieved from the Azure portal under:
+    Function App → App keys → System keys → mcp_extension
+
+Argument Parsing
+----------------
+When MCP tools are invoked by AI clients (VS Code Copilot, Azure AI Foundry,
+or any MCP-compatible client), the trigger context is a JSON string with this shape:
+
+    {
+        "arguments": {
+            "param1": "value1",
+            "param2": "value2"
+        }
+    }
+
+Arguments are always nested under the "arguments" key. Each tool in this file
+uses the pattern:
+
+    content = json.loads(context)
+    args = content.get("arguments", content)   # fallback for direct test calls
+    value = args.get("param_name", default)
+
+The fallback `content.get("arguments", content)` allows direct JSON-RPC test
+calls (e.g., via curl or PowerShell Invoke-RestMethod) to pass arguments at
+the top level without nesting under "arguments".
+"""
+
 import json
 import logging
 import azure.functions as func
 
+# The FunctionApp instance. AuthLevel.FUNCTION means the MCP extension system
+# key is required — this is the correct level for MCP servers so that the
+# x-functions-key header gates access.
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
 
 class ToolProperty:
+    """Describes a single input parameter for an MCP tool.
+
+    The Azure Functions MCP trigger requires tool properties to be serialised
+    as a JSON array of objects with the shape:
+        [{"propertyName": str, "propertyType": str, "description": str}, ...]
+
+    This helper class represents one entry in that array.
+    """
+
     def __init__(self, property_name: str, property_type: str, description: str):
         self.propertyName = property_name
         self.propertyType = property_type
@@ -20,6 +79,8 @@ class ToolProperty:
 
 
 def props(*args: ToolProperty) -> str:
+    """Serialise one or more ToolProperty objects to the JSON string expected
+    by the mcpToolTrigger's toolProperties decorator argument."""
     return json.dumps([p.to_dict() for p in args])
 
 
@@ -35,6 +96,9 @@ def props(*args: ToolProperty) -> str:
     toolProperties="[]",
 )
 def hello_mcp(context) -> str:
+    """Simple connectivity check tool. Takes no arguments and returns a
+    greeting string. Use this to verify the MCP server is reachable before
+    testing more complex tools."""
     logging.info("hello_mcp triggered")
     return "Hello from the sample MCP server running on Azure Functions!"
 
@@ -67,6 +131,14 @@ _MOCK_WEATHER = {
     toolProperties=_WEATHER_PROPS,
 )
 def get_weather(context) -> str:
+    """Return mock weather conditions for a given city.
+
+    Supported cities: London, Tokyo, New York, Sydney, Berlin, Seattle,
+    Paris, Dubai. Unknown cities receive a generic default response.
+
+    Returns a JSON string with keys: city, temperature_c, temperature_f,
+    condition, humidity_pct, wind_kmh, source.
+    """
     logging.info("get_weather triggered")
     content = json.loads(context)
     city = content.get("arguments", content).get("city", "").strip().lower()
@@ -127,6 +199,15 @@ _MOCK_PRODUCTS = [
     toolProperties=_SEARCH_PROPS,
 )
 def search_products(context) -> str:
+    """Search a mock product catalog by name or category keyword.
+
+    Arguments:
+        query (str): Search term matched against product name and category.
+        max_results (str, optional): Cap on results returned. Default 3, max 5.
+
+    Returns a JSON string with keys: query, total_matches, returned, products,
+    source. Falls back to the first N products when no query matches are found.
+    """
     logging.info("search_products triggered")
     content = json.loads(context)
     args = content.get("arguments", content)
@@ -179,6 +260,15 @@ _MOCK_ORDERS = {
     toolProperties=_ORDER_PROPS,
 )
 def get_order_status(context) -> str:
+    """Look up mock order status and tracking information by order ID.
+
+    Valid mock order IDs: ORD-1001 through ORD-1005, covering the full
+    order lifecycle (Processing → Shipped → In Transit → Delivered, and
+    Cancelled).
+
+    Returns a JSON string with keys: order_id, status, placed,
+    estimated_delivery, delivered, carrier, tracking, source.
+    """
     logging.info("get_order_status triggered")
     content = json.loads(context)
     order_id = content.get("arguments", content).get("order_id", "").strip().upper()
