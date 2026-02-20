@@ -1,0 +1,11 @@
+{
+    "insightsComponents": "appi-",
+    "managedIdentityUserAssignedIdentities": "id-",
+    "networkPrivateDnsZones": "pdnsz-",
+    "networkVirtualNetworks": "vnet-",
+    "operationalInsightsWorkspaces": "log-",
+    "resourcesResourceGroups": "rg-",
+    "storageStorageAccounts": "st",
+    "webServerFarms": "plan-",
+    "webSitesFunctions": "func-"
+}

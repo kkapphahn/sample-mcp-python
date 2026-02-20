@@ -1,0 +1,8 @@
+name: sample-mcp-python
+metadata:
+  template: sample-mcp-python@1.0.0
+services:
+  api:
+    project: ./src/
+    language: python
+    host: function

@@ -1,0 +1,19 @@
+# Azure Developer CLI environment state (contains deployed resource names and secrets)
+.azure/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Azure Functions
+local.settings.json
+
+# VS Code
+.vscode/settings.json
